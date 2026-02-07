@@ -1,36 +1,51 @@
 import http from "node:http";
 import Gun from "gun";
 
-// Bun automatically loads .env files, so this works out of the box
 const PORT = process.env.PORT || 8765;
 
 const server = http.createServer((req, res) => {
-
-    // Handle CORS (Allow Vercel to talk to Railway)
-    // We add these headers to EVERY response
+    // Standard CORS Headers for HTTP requests
     const headers = {
-        'Access-Control-Allow-Origin': '*', // Allow ALL domains (or put your Vercel URL here)
+        'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
         'Access-Control-Allow-Headers': 'Origin, X-Requested-With, Content-Type, Accept',
-        'Content-Type': 'text/plain'
     };
-  
-    // Gun.serve returns true if it handles the request
-    // We cast to 'any' here because Gun's types can be strict about http types
+
+    if (req.method === 'OPTIONS') {
+        res.writeHead(204, headers);
+        res.end();
+        return;
+    }
+
     if ((Gun as any).serve(req, res)) { 
         return; 
     } 
 
-    res.writeHead(200);
+    res.writeHead(200, headers);
     res.end('MediaHub Relay is Running!');
 });
 
-// Initialize Gun
+// Initialize Gun with "Cloud-Safe" defaults
 const gun = Gun({ 
     web: server,
-    file: 'radata' // This ensures data persists to disk in a 'radata' folder
+    file: 'radata',
+    multicast: false, // Disable local network broadcasting (useless in cloud)
+    axe: false,       // Disable mesh optimization (can cause data silos)
+});
+
+// --- DEBUGGING LOGS ---
+console.log("Relay started. Waiting for data...");
+
+// Log whenever a peer connects
+gun.on('hi', (peer) => {
+    console.log('👋 Peer connected!', peer);
+});
+
+// Log whenever data is received
+gun.on('in', (msg) => {
+    console.log('📨 Data received:', JSON.stringify(msg).substring(0, 100) + "...");
 });
 
 server.listen(PORT, () => {
-    console.log(`Gun Relay running on http://localhost:${PORT}`);
+    console.log(`Gun Relay running on port ${PORT}`);
 });
